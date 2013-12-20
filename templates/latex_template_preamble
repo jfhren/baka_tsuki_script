@@ -8,4 +8,13 @@
 \usepackage[pdftex, pdfauthor={{{0}}}, pdftitle={{{1}}}, pdfsubject={{Light Novel}}]{{hyperref}}
 \setlength{{\parindent}}{{0cm}}
 \setlength{{\parskip}}{{0.8em}}
+\makeatletter
+\def\@makechapterhead#1{{%
+  \vspace*{{50\p@}}%
+  {{\parindent \z@ \raggedright \normalfont
+    \interlinepenalty\@M
+    \Huge \bfseries #1\par\nobreak
+    \vskip 40\p@
+  }}}}
+\makeatother
 \begin{{document}}

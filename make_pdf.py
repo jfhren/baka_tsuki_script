@@ -50,17 +50,22 @@ def parse_tag(tag, images, template):
                 text += template[1].format(elt.string.strip())
             elif elt.name == 'i':
                 text += template[2].format(elt.string.strip())
-        text = text.replace('_', '\_').replace('☆', ' ').replace('♪', ' ').replace('~', '\~{}').replace('～', '\~{}')
+        for replace_match in template[-1]:
+            text = text.replace(replace_match[0], replace_match[1])
     elif tag.name == 'div':
-        image_name = tag.find(class_='thumbimage')['src']
-        image_name = image_name[22:image_name.rfind('/')]
+        tag_img = tag.find(class_='thumbimage')
+        if tag_img:
+            image_name = tag_img['src']
+            image_name = image_name[22:image_name.rfind('/')]
 
-        if image_name in images:
-            images.remove(image_name)
+            if image_name in images:
+                images.remove(image_name)
 
-        text = template[3].format('./images/'+image_name[image_name.rfind('/')+1:])
+            text = template[3].format('./images/'+image_name[image_name.rfind('/')+1:])
     elif tag.name == 'center':
-        text = template[4]
+        text = template[4].format(tag.string)
+        for replace_match in template[-1]:
+            text = text.replace(replace_match[0], replace_match[1])
 
     if text:
         text += '\n'
@@ -123,6 +128,8 @@ def generate_tex(url, output_dir, author, main_title, title):
 
     with open('templates/latex_template_document') as template_file:
         template = template_file.read().split()
+    with open('templates/latex_template_replace') as template_file:
+        template.append([(lambda x: x if len(x) == 2 else [x[0], ' '])(e.split()) for e in template_file.readlines()])
 
     html_content = requests.get(url).text
     soup = BeautifulSoup(html_content)
@@ -137,7 +144,7 @@ def generate_tex(url, output_dir, author, main_title, title):
 
     # For each chapter (excluding the first), we get its contents.
     sections = [(section.string,
-                 [parse_tag(tag, images, template) for tag in section.parent.next_siblings_until(['h3','table']) if parse_tag(tag, images, template)]
+                 [parse_tag(tag, images, template) for tag in section.parent.next_siblings_until(['h2', 'h3','table']) if parse_tag(tag, images, template)]
                 ) for section in section_headers[1:]]
 
     output_tex(os.path.join(output_dir, title+'.tex'), images, sections, template, author, main_title)
@@ -178,4 +185,5 @@ if __name__ == '__main__':
     for volume in config:
         output_dir = os.path.join(main_title, volume['title'])
         generate_tex(volume['url'], output_dir, author, main_title, volume['title'])
+        generate_pdf(output_dir, volume['title'])
         generate_pdf(output_dir, volume['title'])
