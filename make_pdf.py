@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from bs4 import NavigableString
 from bs4 import Tag
 import requests
+from PIL import Image
 
 def next_siblings_until(self, stop_tags):
 
@@ -37,7 +38,18 @@ def next_siblings_until(self, stop_tags):
 Tag.next_siblings_until = next_siblings_until
 
 
-def parse_tag(tag, images, template):
+def get_image_angle(image_path):
+
+    """Get an image angle depending on its geometry."""
+
+    (width, height) = Image.open(image_path).size
+    print('{0}: {1} {2}\n'.format(image_path, width, height))
+    if width > height:
+        return 90
+    return 0
+
+
+def parse_tag(tag, images, template, output_dir):
 
     """Parse a tag and child tags using the images and the latex template and return a string."""
 
@@ -61,7 +73,7 @@ def parse_tag(tag, images, template):
             if image_name in images:
                 images.remove(image_name)
 
-            text = template[3].format('./images/'+image_name[image_name.rfind('/')+1:])
+            text = template[3].format(get_image_angle(os.path.join(output_dir, 'images/'+image_name[image_name.rfind('/')+1:])), './images/'+image_name[image_name.rfind('/')+1:])
     elif tag.name == 'center':
         text = template[4].format(tag.string)
         for replace_match in template[-1]:
@@ -82,7 +94,7 @@ def output_tex(filename, images, sections, template, author, main_title):
             tex_file.write(preamble.read().format(author, main_title))
 
         for image in images:
-            tex_file.write(template[3].format('./images/'+image[image.rfind('/')+1:])+'\n')
+            tex_file.write(template[3].format(get_image_angle(os.path.join(output_dir, 'images/'+image[image.rfind('/')+1:])), './images/'+image[image.rfind('/')+1:])+'\n')
 
         for section in sections:
             tex_file.write(template[0].format(section[0]))
@@ -144,13 +156,15 @@ def generate_tex(url, output_dir, author, main_title, title):
 
     # For each chapter (excluding the first), we get its contents.
     sections = [(section.string,
-                 [parse_tag(tag, images, template) for tag in section.parent.next_siblings_until(['h2', 'h3','table']) if parse_tag(tag, images, template)]
+                 [parse_tag(tag, images, template, output_dir) for tag in section.parent.next_siblings_until(['h2', 'h3','table']) if parse_tag(tag, images, template, output_dir)]
                 ) for section in section_headers[1:]]
 
     output_tex(os.path.join(output_dir, title+'.tex'), images, sections, template, author, main_title)
 
 
 def generate_pdf(output_dir, title):
+
+    """Call pdflatex in a separate process and wait for it to finish."""
 
     pid = os.fork()
 
@@ -162,6 +176,9 @@ def generate_pdf(output_dir, title):
 
 
 def get_config(config_file):
+
+    """Parse the config of the light novel."""
+
     with open(config_file) as conf_file:
         author = conf_file.readline().strip()
         main_title = conf_file.readline().strip()

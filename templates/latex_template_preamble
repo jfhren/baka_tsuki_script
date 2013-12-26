@@ -1,4 +1,5 @@
-\documentclass[14pt, openany]{{extbook}}
+\documentclass[17pt, openany]{{extbook}}
+\usepackage{{lmodern}}
 \usepackage[english]{{babel}}
 \usepackage[T1]{{fontenc}}
 \usepackage[utf8x]{{inputenc}}

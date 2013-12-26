@@ -6,8 +6,8 @@ and generate pdf file using pdflatex.
 
 ## Requirements
 
-I wrote it with Python3 in mind so I do not know with Python2. BeautifulSoup4
-and requests are imported and thus needed.
+I wrote it with Python3 in mind so I do not know with Python2. BeautifulSoup4,
+requests and pillow (PIL for Python3) are imported and thus needed.
 
 ## Usage
 
@@ -18,3 +18,7 @@ I only tested the script for Chrome Shelled Regios and Mahouka Koukou no
 Rettousei, so I am not sure it works correctly for other light novels on
 Baka-Tsuki.
 
+
+## Futur Improvements
+
+Moving away from latex and generating mobi files instead.

@@ -1,5 +1,5 @@
 \chapter{{{0}}}
 \textbf{{{0}}}
 \textit{{{0}}}
-\begin{{figure}}[p]\centering\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{{{0}}}\end{{figure}}
+\begin{{figure}}[p]\centering\includegraphics[angle={0},width=\textwidth,height=\textheight,keepaspectratio]{{{1}}}\end{{figure}}
 \vspace*{{-0.8em}}\begin{{center}}{0}\end{{center}}
