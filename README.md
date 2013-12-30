@@ -17,6 +17,9 @@ each volume and their titles:  `
 I only tested the script for Chrome Shelled Regios and Mahouka Koukou no
 Rettousei, so I am not sure it works correctly for other light novels on
 Baka-Tsuki.
+The script downloads the necessary images if not present. If a previous .tex
+file is found, it is tested again the newly generated .tex file and if no change
+is found, the pdf is not generated (since it is useless).
 
 
 ## Futur Improvements

@@ -5,13 +5,8 @@
 # terms of the Do What The Fuck You Want To Public License, Version 2,
 # as published by Sam Hocevar. See the COPYING file for more details.
 
-import sys
-import os
-import errno
-from bs4 import BeautifulSoup
-from bs4 import NavigableString
-from bs4 import Tag
-import requests
+import sys, os, errno, requests, subprocess
+from bs4 import BeautifulSoup, NavigableString, Tag
 from PIL import Image
 
 def next_siblings_until(self, stop_tags):
@@ -38,74 +33,35 @@ def next_siblings_until(self, stop_tags):
 Tag.next_siblings_until = next_siblings_until
 
 
-def get_image_angle(image_path):
+def get_config(config_file):
 
-    """Get an image angle depending on its geometry."""
+    """Parse the config of the light novel."""
 
-    (width, height) = Image.open(image_path).size
-    print('{0}: {1} {2}\n'.format(image_path, width, height))
-    if width > height:
-        return 90
-    return 0
+    with open(config_file) as conf_file:
+        author = conf_file.readline().strip()
+        main_title = conf_file.readline().strip()
+        config = [{'url': line.split()[0], 'title': line[line.find(' '):].strip()} for line in conf_file.readlines() if line.strip()]
 
-
-def parse_tag(tag, images, template, output_dir):
-
-    """Parse a tag and child tags using the images and the latex template and return a string."""
-
-    text = ''
-    if tag.name == 'p':
-        for elt in tag.contents:
-            if isinstance(elt, NavigableString) and elt.string.strip():
-                text += elt.string.strip()
-            elif elt.name == 'b':
-                text += template[1].format(elt.string.strip())
-            elif elt.name == 'i':
-                text += template[2].format(elt.string.strip())
-        for replace_match in template[-1]:
-            text = text.replace(replace_match[0], replace_match[1])
-    elif tag.name == 'div':
-        tag_img = tag.find(class_='thumbimage')
-        if tag_img:
-            image_name = tag_img['src']
-            image_name = image_name[22:image_name.rfind('/')]
-
-            if image_name in images:
-                images.remove(image_name)
-
-            text = template[3].format(get_image_angle(os.path.join(output_dir, 'images/'+image_name[image_name.rfind('/')+1:])), './images/'+image_name[image_name.rfind('/')+1:])
-    elif tag.name == 'center':
-        text = template[4].format(tag.string)
-        for replace_match in template[-1]:
-            text = text.replace(replace_match[0], replace_match[1])
-
-    if text:
-        text += '\n'
-
-    return text
+    return (author, main_title, config)
 
 
-def output_tex(filename, images, sections, template, author, main_title):
+def get_template():
 
-    """Output a tex file containing the images and sections."""
+    """Parse the template files and return a dictionary of them."""
 
-    with open(filename, mode='w', encoding='utf-8') as tex_file:
-        with open('templates/latex_template_preamble') as preamble:
-            tex_file.write(preamble.read().format(author, main_title))
+    with open('templates/latex_template_document') as template_file:
+        template = {'document':template_file.read().split()}
 
-        for image in images:
-            tex_file.write(template[3].format(get_image_angle(os.path.join(output_dir, 'images/'+image[image.rfind('/')+1:])), './images/'+image[image.rfind('/')+1:])+'\n')
+    with open('templates/latex_template_replace') as template_file:
+        template['replace'] = [(lambda x: x if len(x) == 2 else [x[0], ' '])(e.split()) for e in template_file.readlines()]
 
-        for section in sections:
-            tex_file.write(template[0].format(section[0]))
-            for text in section[-1]:
-                tex_file.write(text)
-                tex_file.write('\n')
+    with open('templates/latex_template_preamble') as preamble:
+        template['preamble'] = preamble.read().format(author, main_title)
 
-        with open('templates/latex_template_peroration') as peroration:
-            tex_file.write(peroration.read())
+    with open('templates/latex_template_peroration') as peroration:
+        template['peroration'] = peroration.read()
 
-    print(filename+' written.')
+    return template
 
 
 def get_images(images_dir, images):
@@ -128,9 +84,55 @@ def get_images(images_dir, images):
                 image_file.write(requests.get('http://www.baka-tsuki.org/project/images/'+image).content)
 
 
-def generate_tex(url, output_dir, author, main_title, title):
+def get_image_angle(image_path):
 
-    """Generate a tex file from a given file."""
+    """Get an image angle depending on its geometry."""
+
+    (width, height) = Image.open(image_path).size
+    if width > height:
+        return 90
+    return 0
+
+
+def parse_tag(tag, images, template, output_dir):
+
+    """Parse a tag and child tags using the images and the latex template and return a string."""
+
+    text = ''
+    if tag.name == 'p':
+        for elt in tag.contents:
+            if isinstance(elt, NavigableString) and elt.string.strip():
+                text += elt.string.strip()
+            elif elt.name == 'b':
+                text += template['document'][1].format(elt.string.strip())
+            elif elt.name == 'i':
+                text += template['document'][2].format(elt.string.strip())
+        for replace_match in template['replace']:
+            text = text.replace(replace_match[0], replace_match[1])
+    elif tag.name == 'div':
+        tag_img = tag.find(class_='thumbimage')
+        if tag_img:
+            image_name = tag_img['src']
+            image_name = image_name[22:image_name.rfind('/')]
+
+            if image_name in images:
+                images.remove(image_name)
+
+            text = template['document'][3].format(get_image_angle(os.path.join(output_dir, 'images/'+image_name[image_name.rfind('/')+1:])), './images/'+image_name[image_name.rfind('/')+1:])
+    elif tag.name == 'center':
+        text = template['document'][4].format(tag.string)
+        for replace_match in template['replace']:
+            text = text.replace(replace_match[0], replace_match[1])
+
+    if text:
+        text += '\n'
+
+    return text
+
+
+def generate_tex_file(url, output_dir, title, template):
+
+    """Generate a tex file from a given url in a given output dir with a given title.tex filename."""
 
     try:
         os.mkdir(output_dir)
@@ -138,53 +140,65 @@ def generate_tex(url, output_dir, author, main_title, title):
         if e.errno != errno.EEXIST:
             raise e
 
-    with open('templates/latex_template_document') as template_file:
-        template = template_file.read().split()
-    with open('templates/latex_template_replace') as template_file:
-        template.append([(lambda x: x if len(x) == 2 else [x[0], ' '])(e.split()) for e in template_file.readlines()])
-
+    # Get the html content of the url and parse it.
     html_content = requests.get(url).text
     soup = BeautifulSoup(html_content)
 
     # Get each chapter.
-    section_headers = soup.find_all(class_='mw-headline')
+    chapter_headers = soup.find_all(class_='mw-headline')
 
     # Get the images from the illustration "chapter".
-    images = [tag['src'][22:tag['src'].rfind('/')] for tag in section_headers[0].parent.find_next_sibling('ul').find_all('img')]
+    images = [tag['src'][22:tag['src'].rfind('/')] for tag in chapter_headers[0].parent.find_next_sibling('ul').find_all('img')]
 
     get_images(os.path.join(output_dir, 'images'), images)
 
     # For each chapter (excluding the first), we get its contents.
-    sections = [(section.string,
-                 [parse_tag(tag, images, template, output_dir) for tag in section.parent.next_siblings_until(['h2', 'h3','table']) if parse_tag(tag, images, template, output_dir)]
-                ) for section in section_headers[1:]]
+    chapters = [{'title':chapter.string,
+                 'content':[parse_tag(tag, images, template, output_dir) for tag in chapter.parent.next_siblings_until(['h2', 'h3','table']) if parse_tag(tag, images, template, output_dir)]
+                } for chapter in chapter_headers[1:]]
 
-    output_tex(os.path.join(output_dir, title+'.tex'), images, sections, template, author, main_title)
+    # Starting the tex file with the preamble.
+    tex_file_content = template['preamble']
+
+    # Then the left over images are added.
+    for image in images:
+        tex_file_content += template['document'][3].format(get_image_angle(os.path.join(output_dir, 'images/'+image[image.rfind('/')+1:])), './images/'+image[image.rfind('/')+1:])+'\n'
+
+    # We go through the chapters and add each chapter title and content.
+    for chapter in chapters:
+        tex_file_content += template['document'][0].format(chapter['title'])
+        for text in chapter['content']:
+            tex_file_content += text + '\n'
+
+    # Finally we add the peroration.
+    tex_file_content += template['peroration']
+
+    # The filename of the tex file.
+    filename = os.path.join(output_dir, title+'.tex')
+
+    # If the file already exists, we check if something changed.
+    if os.path.exists(filename):
+        with open(filename, mode='r', encoding='utf-8') as tex_file:
+            previous_tex_file_content = tex_file.read()
+            if previous_tex_file_content == tex_file_content:
+                return False
+
+    # If not we write the tex file.
+    with open(filename, mode='w', encoding='utf-8') as tex_file:
+        tex_file.write(tex_file_content)
+
+    return True
 
 
-def generate_pdf(output_dir, title):
 
-    """Call pdflatex in a separate process and wait for it to finish."""
+def generate_pdf_file(output_dir, title):
 
-    pid = os.fork()
+    """Call pdflatex two times."""
 
-    if pid == 0:
-        os.chdir(output_dir)
-        os.execlp('pdflatex', 'pdflatex', title+'.tex')
-
-    os.waitpid(pid, 0)
-
-
-def get_config(config_file):
-
-    """Parse the config of the light novel."""
-
-    with open(config_file) as conf_file:
-        author = conf_file.readline().strip()
-        main_title = conf_file.readline().strip()
-        config = [{'url': line.split()[0], 'title': line[line.find(' '):].strip()} for line in conf_file.readlines() if line.strip()]
-
-    return (author, main_title, config)
+    # We trash the outputs.
+    null_output = open('/dev/null', 'w')
+    subprocess.Popen(['pdflatex', title+'.tex'], stdout=null_output, stderr=null_output, cwd=output_dir)
+    subprocess.Popen(['pdflatex', title+'.tex'], stdout=null_output, stderr=null_output, cwd=output_dir)
 
 
 if __name__ == '__main__':
@@ -192,6 +206,7 @@ if __name__ == '__main__':
         sys.exit('Usage: {0} config_file'.format(sys.argv[0]))
 
     (author, main_title, config) = get_config(sys.argv[1])
+    template = get_template()
 
     try:
         os.mkdir(main_title)
@@ -201,6 +216,9 @@ if __name__ == '__main__':
 
     for volume in config:
         output_dir = os.path.join(main_title, volume['title'])
-        generate_tex(volume['url'], output_dir, author, main_title, volume['title'])
-        generate_pdf(output_dir, volume['title'])
-        generate_pdf(output_dir, volume['title'])
+
+        if generate_tex_file(volume['url'], output_dir, volume['title'], template):
+            generate_pdf_file(output_dir, volume['title'])
+            print(volume['title'] + ' generated')
+        else:
+            print(volume['title'] + ' up-to-date.')
