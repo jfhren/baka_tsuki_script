@@ -100,6 +100,7 @@ def parse_tag(tag, images, template, output_dir):
 
     text = ''
     if tag.name == 'p':
+        should_insert_vspace = False
         for elt in tag.contents:
             if isinstance(elt, NavigableString) and elt.string.strip():
                 text += elt.string.strip()
@@ -107,8 +108,12 @@ def parse_tag(tag, images, template, output_dir):
                 text += template['document'][1].format(elt.string.strip())
             elif elt.name == 'i':
                 text += template['document'][2].format(elt.string.strip())
+            elif elt.name == 'br':
+                should_insert_vspace = True
         for replace_match in template['replace']:
             text = text.replace(replace_match[0], replace_match[1])
+        if text and should_insert_vspace:
+            text = '\\vspace*{1em}\n' + text
     elif tag.name == 'div':
         tag_img = tag.find(class_='thumbimage')
         if tag_img:
@@ -166,9 +171,10 @@ def generate_tex_file(url, output_dir, title, template):
 
     # We go through the chapters and add each chapter title and content.
     for chapter in chapters:
-        tex_file_content += template['document'][0].format(chapter['title'])
-        for text in chapter['content']:
-            tex_file_content += text + '\n'
+        if chapter['content']:
+            tex_file_content += template['document'][0].format(chapter['title'])
+            for text in chapter['content']:
+                tex_file_content += text + '\n'
 
     # Finally we add the peroration.
     tex_file_content += template['peroration']
@@ -197,8 +203,8 @@ def generate_pdf_file(output_dir, title):
 
     # We trash the outputs.
     null_output = open('/dev/null', 'w')
-    subprocess.Popen(['pdflatex', title+'.tex'], stdout=null_output, stderr=null_output, cwd=output_dir)
-    subprocess.Popen(['pdflatex', title+'.tex'], stdout=null_output, stderr=null_output, cwd=output_dir)
+    subprocess.Popen(['pdflatex', title+'.tex'], stdout=null_output, stderr=null_output, cwd=output_dir).wait()
+    subprocess.Popen(['pdflatex', title+'.tex'], stdout=null_output, stderr=null_output, cwd=output_dir).wait()
 
 
 if __name__ == '__main__':
